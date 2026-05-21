@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-export default function OverviewPage() {
+function OverviewContent() {
   const [email, setEmail] = useState("");
+  const [hasPredictions, setHasPredictions] = useState(false);
+  const [showPopup, setShowPopup] = useState(false);
+
   const searchParams = useSearchParams();
   const predictionsSaved = searchParams.get("predictionsSaved");
-  const [showPopup, setShowPopup] = useState(false);
-  const [hasPredictions, setHasPredictions] = useState(false);
 
   useEffect(() => {
     async function loadUser() {
@@ -116,5 +117,13 @@ export default function OverviewPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function OverviewPage() {
+  return (
+    <Suspense fallback={null}>
+      <OverviewContent />
+    </Suspense>
   );
 }
