@@ -30,6 +30,15 @@ export default function LoginPage() {
           Inloggen
         </h1>
 
+        <div className="mb-6">
+          <button
+            onClick={() => window.location.href = "/"}
+            className="text-gray-400 hover:text-white transition"
+          >
+            ← Terug
+          </button>
+        </div>
+
         <div className="flex flex-col gap-4">
           <input
             type="email"
