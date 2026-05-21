@@ -303,7 +303,9 @@ export default function DashboardPage() {
             {matches.map((match) => {
               const score = getScoreForMatch(match);
               const prediction = predictions[match.id];
+              const bonusIsPublic = deadlinePassed;
               const isBonus = bonusMatchId === match.id;
+              const showBonus = canChooseBonus || bonusIsPublic;
 
               return (
                 <div
@@ -358,11 +360,11 @@ export default function DashboardPage() {
                     ) : (
                       <div
                         className={`h-6 w-6 rounded border ${
-                          isBonus
+                          showBonus && isBonus
                             ? "bg-yellow-400 border-yellow-400"
                             : "border-white/20"
                         }`}
-                        title={isBonus ? "Bonuswedstrijd" : ""}
+                        title={showBonus && isBonus ? "Bonuswedstrijd" : ""}
                       />
                     )}
                   </div>
@@ -400,10 +402,10 @@ export default function DashboardPage() {
 
         <div className="rounded-2xl bg-white/5 border border-white/10 p-6 mt-6 text-gray-400">
           <h2 className="text-2xl font-bold text-white mb-3">Puntentelling</h2>
-          <p>Exacte score goed = 12 punten</p>
-          <p>Winnaar goed + één teamscore goed = 4 punten</p>
-          <p>Winnaar goed = 3 punten</p>
           <p>Winnaar fout + één teamscore goed = 1 punt</p>
+          <p>Winnaar goed = 3 punten</p>
+          <p>Winnaar goed + één teamscore goed = 4 punten</p>
+          <p>Exacte score goed = 12 punten</p>
           <p>Bonuswedstrijd = punten x2</p>
         </div>
       </div>
