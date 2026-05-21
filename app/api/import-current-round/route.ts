@@ -46,8 +46,8 @@ export async function GET() {
 
     let activeMatchday: number;
 
-    if (process.env.DEBUG_MATCHDAY) {
-        activeMatchday = Number(process.env.DEBUG_MATCHDAY);
+    if (process.env.DEBUG_CURRENT_MATCHDAY) {
+        activeMatchday = Number(process.env.DEBUG_CURRENT_MATCHDAY);
     } else {
         const unfinishedMatches = allMatches.filter(
             (match: any) => match.status !== "FINISHED"
@@ -123,6 +123,16 @@ export async function GET() {
       deadline: deadline.toISOString(),
       matchesImported: matchRows.length,
     });
+
+    /*return NextResponse.json({
+      message: "Actieve speelronde geïmporteerd",
+      debugCurrentMatchday: process.env.DEBUG_CURRENT_MATCHDAY || null,
+      oldDebugMatchday: process.env.DEBUG_MATCHDAY || null,
+      activeMatchday,
+      deadline: deadline.toISOString(),
+      matchesImported: matchRows.length,
+    });*/
+
   } catch (error) {
     return NextResponse.json(
       { error: "Importeren mislukt" },

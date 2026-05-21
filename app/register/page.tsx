@@ -10,6 +10,19 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
 
   async function handleRegister() {
+    const { count, error: countError } = await supabase
+    .from("profiles")
+    .select("*", { count: "exact", head: true });
+
+  if (countError) {
+    alert(countError.message);
+    return;
+  }
+
+  if ((count || 0) >= 7) {
+    alert("Het maximum van 7 spelers is bereikt.");
+    return;
+  }
 
     const { data, error } = await supabase.auth.signUp({
         email,

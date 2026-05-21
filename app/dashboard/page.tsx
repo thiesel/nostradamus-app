@@ -35,6 +35,10 @@ export default function DashboardPage() {
   const [deadlineText, setDeadlineText] = useState("");
   const [scoreResults, setScoreResults] = useState<ScoreResult[]>([]);
   const [totalPoints, setTotalPoints] = useState(0);
+  const [roundNumber, setRoundNumber] = useState<number | null>(null);
+  const [activeRoundId, setActiveRoundId] = useState<number | null>(null);
+  const [canChooseBonus, setCanChooseBonus] = useState(false);
+  const [bonusMatchId, setBonusMatchId] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadDashboard() {
@@ -60,11 +64,16 @@ export default function DashboardPage() {
 
       const { data: activeRound } = await supabase
         .from("rounds")
-        .select("id, round_number, deadline")
+        .select("id, round_number, deadline, loser_user_id, bonus_match_id")
         .eq("round_number", importData.activeMatchday)
         .single();
 
       if (!activeRound) return;
+
+      setActiveRoundId(activeRound.id);
+      setRoundNumber(activeRound.round_number);
+      setCanChooseBonus(activeRound.loser_user_id === user.id);
+      setBonusMatchId(activeRound.bonus_match_id);
 
       const deadline = new Date(activeRound.deadline);
       const now = new Date();
@@ -133,6 +142,11 @@ export default function DashboardPage() {
     }));
   }
 
+  function chooseBonusMatch(matchId: number) {
+    if (!canChooseBonus) return;
+    setBonusMatchId(matchId);
+  }
+
   async function saveAllPredictions() {
     if (deadlinePassed) {
       alert("Voorspellingen zijn gesloten");
@@ -151,6 +165,32 @@ export default function DashboardPage() {
 
       if (isNaN(Number(prediction.home)) || isNaN(Number(prediction.away))) {
         alert(`Ongeldige score bij ${match.home_team} - ${match.away_team}`);
+        return;
+      }
+    }
+
+    if (canChooseBonus && !bonusMatchId) {
+      alert("Kies eerst een bonuswedstrijd");
+      return;
+    }
+
+    if (canChooseBonus && activeRoundId && bonusMatchId) {
+      const response = await fetch("/api/set-bonus-match", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          roundId: activeRoundId,
+          matchId: bonusMatchId,
+          userId: userId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if(!response.ok) {
+        alert(data.error || "Fout bij opslaan bonuswedstrijd");
         return;
       }
     }
@@ -209,10 +249,19 @@ export default function DashboardPage() {
         <div className="rounded-2xl bg-white/5 border border-white/10 p-6 mb-6">
           <div className="flex justify-between items-start gap-4">
             <div>
-              <h2 className="text-3xl font-bold">Huidige speelronde</h2>
+              <h2 className="text-3xl font-bold">
+                Huidige speelronde {roundNumber ? roundNumber : ""}
+              </h2>
+
               <p className="text-gray-400 mt-2">
                 Deadline: {deadlineText || "Wordt geladen..."}
               </p>
+
+              {canChooseBonus && (
+                <p className="text-yellow-300 mt-2 font-bold">
+                  Jij bent weekloser en mag de bonuswedstrijd kiezen.
+                </p>
+              )}
             </div>
 
             <button
@@ -237,17 +286,16 @@ export default function DashboardPage() {
 
             <div className="rounded-xl border border-white/10 bg-black/40 px-6 py-3 text-xl">
               Totaal:{" "}
-              <span className="text-green-300 font-bold">
-                {totalPoints}
-              </span>{" "}
+              <span className="text-green-300 font-bold">{totalPoints}</span>{" "}
               punten
             </div>
           </div>
 
-          <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_1fr] gap-4 text-gray-400 font-bold border-b border-white/10 pb-3 mb-2">
+          <div className="hidden md:grid grid-cols-[2fr_1fr_1fr_0.7fr_1fr] gap-4 text-gray-400 font-bold border-b border-white/10 pb-3 mb-2">
             <div>Wedstrijd</div>
             <div className="text-center">Punten</div>
             <div className="text-center">Uitslag</div>
+            <div className="text-center">Bonus</div>
             <div className="text-center">Jouw voorspelling</div>
           </div>
 
@@ -255,11 +303,12 @@ export default function DashboardPage() {
             {matches.map((match) => {
               const score = getScoreForMatch(match);
               const prediction = predictions[match.id];
+              const isBonus = bonusMatchId === match.id;
 
               return (
                 <div
                   key={match.id}
-                  className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr] gap-4 items-center border-b border-white/10 py-5"
+                  className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_0.7fr_1fr] gap-4 items-center border-b border-white/10 py-5"
                 >
                   <div>
                     <h3 className="text-xl font-bold">
@@ -295,6 +344,27 @@ export default function DashboardPage() {
                     <div className="rounded-xl border border-white/10 bg-black/40 px-6 py-3 text-2xl font-bold min-w-[140px] text-center">
                       {score ? score.result : "-"}
                     </div>
+                  </div>
+
+                  <div className="flex justify-center">
+                    {canChooseBonus ? (
+                      <input
+                        type="checkbox"
+                        checked={isBonus}
+                        onChange={() => chooseBonusMatch(match.id)}
+                        disabled={deadlinePassed}
+                        className="h-6 w-6 cursor-pointer disabled:cursor-not-allowed"
+                      />
+                    ) : (
+                      <div
+                        className={`h-6 w-6 rounded border ${
+                          isBonus
+                            ? "bg-yellow-400 border-yellow-400"
+                            : "border-white/20"
+                        }`}
+                        title={isBonus ? "Bonuswedstrijd" : ""}
+                      />
+                    )}
                   </div>
 
                   <div className="flex justify-center">

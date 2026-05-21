@@ -5,10 +5,18 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
+type Standing = {
+  userId: string;
+  name: string;
+  totalPoints: number;
+};
+
 function OverviewContent() {
   const [email, setEmail] = useState("");
+  const [standings, setStandings] = useState<Standing[]>([]);
   const [hasPredictions, setHasPredictions] = useState(false);
   const [showPopup, setShowPopup] = useState(false);
+  const [publicPredictionsOpen, setPublicPredictionsOpen] = useState(false);
 
   const searchParams = useSearchParams();
   const predictionsSaved = searchParams.get("predictionsSaved");
@@ -25,6 +33,18 @@ function OverviewContent() {
       }
 
       setEmail(user.email || "");
+
+      const standingsResponse = await fetch("/api/standings");
+      const standingsData = await standingsResponse.json();
+
+      if (standingsData.standings) {
+        setStandings(standingsData.standings);
+      }
+
+      const publicPredictionsResponse = await fetch("/api/public-predictions");
+      const publicPredictionsData = await publicPredictionsResponse.json();
+
+      setPublicPredictionsOpen(publicPredictionsData.deadlinePassed === true);
 
       const { data: predictions } = await supabase
         .from("predictions")
@@ -85,34 +105,60 @@ function OverviewContent() {
             <h2 className="text-3xl font-bold mb-4">Tussenstand</h2>
 
             <div className="flex flex-col gap-3 text-gray-300">
-              <div className="flex justify-between border-b border-white/10 pb-2">
-                <span>Thijs</span>
-                <span>0 punten</span>
-              </div>
-
-              <div className="flex justify-between border-b border-white/10 pb-2">
-                <span>Mitch</span>
-                <span>0 punten</span>
-              </div>
-
-              <div className="flex justify-between border-b border-white/10 pb-2">
-                <span>Sem</span>
-                <span>0 punten</span>
-              </div>
+              {standings.length === 0 ? (
+                <p className="text-gray-400">Nog geen spelers gevonden.</p>
+              ) : (
+                standings.map((player, index) => (
+                  <div
+                    key={player.userId}
+                    className="flex justify-between border-b border-white/10 pb-2"
+                  >
+                    <span>
+                      {index + 1}. {player.name}
+                    </span>
+                    <span>{player.totalPoints} punten</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
           <div className="rounded-2xl bg-white/5 border border-white/10 p-6">
             <h2 className="text-3xl font-bold mb-4">Acties</h2>
 
-            <Link
-              href="/dashboard"
-              className="block rounded-xl bg-white text-black px-6 py-3 font-bold text-center cursor-pointer hover:opacity-90 transition"
-            >
-              {hasPredictions
-                ? "Voorspellingen veranderen"
-                : "Voorspellingen invullen"}
-            </Link>
+            <div className="flex flex-col gap-4">
+              <Link
+                href="/dashboard"
+                className="block rounded-xl bg-white text-black px-6 py-3 font-bold text-center cursor-pointer hover:opacity-90 transition"
+              >
+                {hasPredictions
+                  ? "Voorspellingen veranderen"
+                  : "Voorspellingen invullen"}
+              </Link>
+
+              <Link
+                href="/previous-round"
+                className="block rounded-xl border border-white/20 text-white px-6 py-3 font-bold text-center cursor-pointer hover:bg-white/10 transition"
+              >
+                Score vorige ronde
+              </Link>
+
+              {publicPredictionsOpen ? (
+                <Link
+                    href="/predictions"
+                    className="block rounded-xl border border-white/20 text-white px-6 py-3 font-bold text-center cursor-pointer hover:bg-white/10 transition"
+                >
+                    Openbare voorspellingen
+                </Link>
+              ) : (
+                <button
+                    disabled
+                    className="block w-full rounded-xl border border-white/10 text-gray-500 px-6 py-3 font-bold text-center cursor-not-allowed opacity-50"
+                >
+                    Openbare voorspellingen
+                </button>
+            )}
+            </div>
           </div>
         </div>
       </div>
