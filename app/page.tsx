@@ -1,21 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function Home() {
-
+function HomeContent() {
   const searchParams = useSearchParams();
-
   const registered = searchParams.get("registered");
 
   const [showPopup, setShowPopup] = useState(false);
 
   useEffect(() => {
-
     if (registered) {
-
       setShowPopup(true);
 
       const timer = setTimeout(() => {
@@ -23,18 +19,13 @@ export default function Home() {
       }, 3000);
 
       return () => clearTimeout(timer);
-
     }
-
   }, [registered]);
 
   return (
     <main className="min-h-screen bg-black text-white flex items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-8 text-center shadow-xl">
-
-        <h1 className="text-5xl font-bold mb-3">
-          Nostradamus
-        </h1>
+        <h1 className="text-5xl font-bold mb-3">Nostradamus</h1>
 
         <p className="text-gray-300 mb-8">
           Eredivisie voorspellingen
@@ -47,7 +38,6 @@ export default function Home() {
         )}
 
         <div className="flex flex-col gap-4">
-
           <Link
             href="/login"
             className="rounded-xl bg-white text-black px-6 py-3 font-bold cursor-pointer hover:opacity-90 transition"
@@ -61,9 +51,16 @@ export default function Home() {
           >
             Account aanmaken
           </Link>
-
         </div>
       </div>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense fallback={null}>
+      <HomeContent />
+    </Suspense>
   );
 }
