@@ -42,48 +42,63 @@ function calculatePoints(
     points = 1;
   }
 
-  if (isBonus) {
-    points = points * 2;
-  }
-
-  return points;
+  return isBonus ? points * 2 : points;
 }
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get("userId");
+  const secret = searchParams.get("secret");
 
+  if (secret !== process.env.CRON_SECRET) {
+    return NextResponse.json(
+      { error: "Niet toegestaan" },
+      { status: 401 }
+    );
+  }
+
+//export async function GET() {
   const { data: rounds, error: roundsError } = await supabase
     .from("rounds")
     .select("id, round_number, bonus_match_id")
     .order("round_number", { ascending: false });
 
-  if (roundsError || !rounds || rounds.length === 0) {
+  if (roundsError || !rounds || rounds.length < 2) {
     return NextResponse.json(
-      { error: "Geen ronde gevonden" },
+      { error: "Niet genoeg rondes gevonden" },
       { status: 500 }
     );
   }
 
-  let activeRound = rounds[0];
+  let currentRound = rounds[0];
+  let previousRound = rounds[1];
 
   if (process.env.DEBUG_CURRENT_MATCHDAY) {
-    const debugRound = rounds.find(
+    const debugCurrent = rounds.find(
       (round) =>
         round.round_number === Number(process.env.DEBUG_CURRENT_MATCHDAY)
     );
 
-    if (debugRound) {
-      activeRound = debugRound;
+    if (debugCurrent) {
+      currentRound = debugCurrent;
     }
   }
 
-  let predictionsQuery = supabase
+  if (process.env.DEBUG_PREVIOUS_MATCHDAY) {
+    const debugPrevious = rounds.find(
+      (round) =>
+        round.round_number === Number(process.env.DEBUG_PREVIOUS_MATCHDAY)
+    );
+
+    if (debugPrevious) {
+      previousRound = debugPrevious;
+    }
+  }
+
+  const { data: predictions, error: predictionsError } = await supabase
     .from("predictions")
     .select(`
       id,
       user_id,
-      match_id,
       predicted_home_score,
       predicted_away_score,
       matches!inner (
@@ -95,14 +110,7 @@ export async function GET(request: Request) {
         away_score
       )
     `)
-    .eq("matches.round_id", activeRound.id);
-
-  if (userId) {
-    predictionsQuery = predictionsQuery.eq("user_id", userId);
-  }
-
-  const { data: predictions, error: predictionsError } =
-    await predictionsQuery;
+    .eq("matches.round_id", previousRound.id);
 
   if (predictionsError) {
     return NextResponse.json(
@@ -111,7 +119,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const results = [];
+  const calculatedResults = [];
 
   for (const prediction of predictions || []) {
     const match = prediction.matches as any;
@@ -124,7 +132,7 @@ export async function GET(request: Request) {
       continue;
     }
 
-    const isBonus = match.id === activeRound.bonus_match_id;
+    const isBonus = match.id === previousRound.bonus_match_id;
 
     const points = calculatePoints(
       prediction.predicted_home_score,
@@ -146,26 +154,70 @@ export async function GET(request: Request) {
       );
     }
 
-    results.push({
+    calculatedResults.push({
       userId: prediction.user_id,
       matchId: match.id,
       match: `${match.home_team} - ${match.away_team}`,
-      prediction: `${prediction.predicted_home_score}-${prediction.predicted_away_score}`,
-      result: `${match.home_score}-${match.away_score}`,
       bonus: isBonus,
       points,
     });
   }
 
-  const totalPoints = results.reduce((sum, item) => sum + item.points, 0);
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles")
+    .select("id, display_name")
+    .order("display_name", { ascending: true });
+
+  if (profilesError) {
+    return NextResponse.json(
+      { error: profilesError.message },
+      { status: 500 }
+    );
+  }
+
+  const weekScores = (profiles || []).map((profile) => {
+    const weekScore = calculatedResults
+      .filter((result) => result.userId === profile.id)
+      .reduce((sum, result) => sum + result.points, 0);
+
+    return {
+      userId: profile.id,
+      name: profile.display_name,
+      weekScore,
+    };
+  });
+
+  weekScores.sort((a, b) => a.weekScore - b.weekScore);
+
+  const weekLoser = weekScores[0];
+
+  if (!weekLoser) {
+    return NextResponse.json(
+      { error: "Geen weekloser gevonden" },
+      { status: 400 }
+    );
+  }
+
+  const { error: updateRoundError } = await supabase
+    .from("rounds")
+    .update({
+      loser_user_id: weekLoser.userId,
+    })
+    .eq("id", currentRound.id);
+
+  if (updateRoundError) {
+    return NextResponse.json(
+      { error: updateRoundError.message },
+      { status: 500 }
+    );
+  }
 
   return NextResponse.json({
-    message: "Scores berekend",
-    round: activeRound.round_number,
-    bonusMatchId: activeRound.bonus_match_id,
-    userId: userId || "all",
-    totalPoints,
-    calculatedPredictions: results.length,
-    results,
+    message: "Ronde verwerkt",
+    currentRound: currentRound.round_number,
+    previousRound: previousRound.round_number,
+    calculatedPredictions: calculatedResults.length,
+    weekLoser,
+    allWeekScores: weekScores,
   });
 }

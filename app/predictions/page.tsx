@@ -23,6 +23,7 @@ export default function PredictionsPage() {
   const [message, setMessage] = useState("");
   const [players, setPlayers] = useState<Player[]>([]);
   const [matches, setMatches] = useState<PredictionMatch[]>([]);
+  const [bonusMatchId, setBonusMatchId] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadPredictions() {
@@ -34,6 +35,7 @@ export default function PredictionsPage() {
       setMessage(data.message || "");
       setPlayers(data.players || []);
       setMatches(data.matches || []);
+      setBonusMatchId(data.bonusMatchId);
     }
 
     loadPredictions();
@@ -104,7 +106,14 @@ export default function PredictionsPage() {
                       className="border-b border-white/10"
                     >
                       <td className="p-3 font-bold">
-                        {match.match}
+                        <div className="flex items-center gap-3">
+                            <span>{match.match}</span>
+                            {bonusMatchId === match.id && (
+                                <span className="rounded-full bg-yellow-400/20 border border-yellow text-yellow-300 px-3 py-1 text-xs font-bold">
+                                    Bonus x2
+                                </span>
+                            )}
+                        </div>
                       </td>
 
                       {players.map((player) => (

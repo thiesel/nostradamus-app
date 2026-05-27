@@ -9,7 +9,7 @@ const supabase = createClient(
 export async function GET() {
   const { data: rounds, error: roundsError } = await supabase
     .from("rounds")
-    .select("id, round_number")
+    .select("id, round_number, bonus_match_id")
     .order("round_number", { ascending: false });
 
   if (roundsError) {
@@ -37,6 +37,9 @@ export async function GET() {
       previousRound = debugRound;
     }
   }
+
+  console.log("DEBUG_PREVIOUS_MATCHDAY:", process.env.DEBUG_PREVIOUS_MATCHDAY);
+  console.log("GEKOZEN PREVIOUS ROUND:", previousRound);
 
   const { data: players, error: playersError } = await supabase
     .from("profiles")
@@ -120,6 +123,7 @@ export async function GET() {
 
   return NextResponse.json({
     round: previousRound.round_number,
+    bonusMatchId: previousRound.bonus_match_id,
     players: players || [],
     matches: tableMatches,
     totals,

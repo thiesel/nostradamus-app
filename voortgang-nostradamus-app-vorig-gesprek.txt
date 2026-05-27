@@ -1,0 +1,562 @@
+# Nostradamus Webapp — Complete Project Context
+
+## Project doel
+
+Voetbalpoule webapp voor Eredivisie voorspellingen.
+
+Gebruikers:
+
+* registreren account
+* voorspellen uitslagen
+* verdienen punten
+* zien ranglijsten
+* zien openbare voorspellingen na deadline
+* weekloser kiest bonuswedstrijd
+
+De app draait volledig online via:
+
+* Vercel
+* Supabase
+
+---
+
+# Tech stack
+
+Frontend:
+
+* Next.js App Router
+* TypeScript
+* Tailwind CSS
+
+Backend:
+
+* Supabase
+
+Deployment:
+
+* Vercel
+
+Version control:
+
+* GitHub
+
+---
+
+# Lokale projectmap
+
+Windows pad:
+
+C:\Users\thijs\Desktop\nostradamus-app
+
+---
+
+# GitHub
+
+Repository:
+
+https://github.com/thiesel/nostradamus-app
+
+Branch:
+main
+
+Deploy workflow:
+
+git add .
+git commit -m "Beschrijving wijziging"
+git push
+
+Na git push:
+
+* Vercel deployt automatisch
+
+---
+
+# Vercel
+
+Project gekoppeld aan GitHub repo.
+
+Huidige domein:
+(zelf invullen indien gewijzigd)
+
+Belangrijk:
+Bij wijziging van Vercel domein:
+
+* nieuwe URL toevoegen in Supabase Authentication settings
+
+Supabase:
+Authentication → URL Configuration
+
+Bijwerken:
+
+* Site URL
+* Redirect URLs
+
+---
+
+# Supabase
+
+Gebruikt voor:
+
+* authenticatie
+* spelersprofielen
+* speelrondes
+* wedstrijden
+* voorspellingen
+* scores
+
+Belangrijke environment variables:
+
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+---
+
+# Database tabellen
+
+## profiles
+
+Kolommen:
+
+* id
+* display_name
+* role
+
+Doel:
+
+* spelersnamen
+* admin rol later
+
+---
+
+## rounds
+
+Kolommen:
+
+* id
+* round_number
+* deadline
+* bonus_match_id
+* loser_user_id
+
+Belangrijk:
+
+* loser_user_id = speler die bonus mag kiezen voor huidige ronde
+* bonus_match_id = geselecteerde bonuswedstrijd
+
+---
+
+## matches
+
+Kolommen:
+
+* id
+* round_id
+* home_team
+* away_team
+* home_score
+* away_score
+* match_date
+
+---
+
+## predictions
+
+Kolommen:
+
+* id
+* user_id
+* match_id
+* predicted_home_score
+* predicted_away_score
+* points
+
+---
+
+# RLS policies predictions
+
+Deze policies zijn nodig:
+
+alter table predictions enable row level security;
+
+drop policy if exists "Users can read own predictions" on predictions;
+drop policy if exists "Users can insert own predictions" on predictions;
+drop policy if exists "Users can update own predictions" on predictions;
+
+create policy "Users can read own predictions"
+on predictions
+for select
+to authenticated
+using (auth.uid() = user_id);
+
+create policy "Users can insert own predictions"
+on predictions
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+create policy "Users can update own predictions"
+on predictions
+for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+---
+
+# Football Data API
+
+Gebruikt voor:
+
+* Eredivisie wedstrijden
+* speelrondes
+* uitslagen
+
+Belangrijk:
+
+* import-current-round route importeert wedstrijden
+
+---
+
+# Debug systeem
+
+.env.local
+
+DEBUG_CURRENT_MATCHDAY=33
+DEBUG_PREVIOUS_MATCHDAY=32
+
+NEXT_PUBLIC_DEBUG_DEADLINE_PASSED=true
+NEXT_PUBLIC_DISABLE_DEADLINE=true
+
+Gebruik:
+
+* huidige ronde debuggen
+* vorige ronde debuggen
+* deadline simuleren
+* openbare voorspellingen simuleren
+
+Na wijziging:
+CTRL + C
+npm run dev
+
+---
+
+# Pagina's
+
+## /
+
+Startpagina.
+
+---
+
+## /login
+
+Werkend:
+
+* inloggen
+* terugknop naar home
+
+---
+
+## /register
+
+Werkend:
+
+* registreren
+* max 7 spelers
+* terugknop naar home
+
+---
+
+## /overview
+
+Werkend:
+
+* tussenstand
+* spelers uit Supabase
+* sortering op punten
+* knop dashboard
+* knop previous round
+* knop public predictions
+* popup na opslaan voorspellingen
+
+---
+
+## /dashboard
+
+Werkend:
+
+* voorspellingen invullen
+* voorspellingen wijzigen
+* scoreoverzicht
+* huidige speelronde
+* deadline
+* bonus selecteren
+* bonus opslaan
+* bonus verborgen voor anderen vóór deadline
+* bonus zichtbaar na deadline
+* weekloser mag bonus kiezen
+* checkbox systeem werkt
+
+Belangrijk:
+
+* slechts 1 bonuscheckbox tegelijk
+* bonus blijft opgeslagen na refresh
+
+---
+
+## /previous-round
+
+Werkend:
+
+* matrix layout
+* uitslagen
+* voorspellingen per speler
+* punten per speler
+* totaalscore per speler
+
+---
+
+## /predictions
+
+Werkend:
+
+* openbare voorspellingen
+* zichtbaar na deadline
+* verborgen vóór deadline
+* bonus zichtbaar na deadline
+
+---
+
+# Puntensysteem
+
+Exacte score goed:
+12 punten
+
+Winnaar goed + één teamscore goed:
+4 punten
+
+Winnaar goed:
+3 punten
+
+Winnaar fout + één teamscore goed:
+1 punt
+
+Bonuswedstrijd:
+punten x2
+
+---
+
+# API routes
+
+## /api/import-current-round
+
+Importeert actieve speelronde.
+
+Gebruikt:
+DEBUG_CURRENT_MATCHDAY
+
+---
+
+## /api/calculate-score
+
+Berekening punten per speler.
+
+---
+
+## /api/standings
+
+Totale ranglijst.
+
+---
+
+## /api/previous-round-score
+
+Data voor previous round pagina.
+
+Gebruikt:
+DEBUG_PREVIOUS_MATCHDAY
+
+---
+
+## /api/public-predictions
+
+Openbare voorspellingen.
+
+Gebruikt:
+
+* DEBUG_CURRENT_MATCHDAY
+* NEXT_PUBLIC_DEBUG_DEADLINE_PASSED
+
+---
+
+## /api/determine-weekloser
+
+Bepaalt weekloser vorige ronde.
+
+Slaat loser_user_id op in huidige ronde.
+
+---
+
+## /api/set-bonus-match
+
+Slaat bonus_match_id op.
+
+Controle:
+
+* alleen weekloser mag bonus kiezen
+
+---
+
+# Weekloser systeem
+
+Werkend:
+
+Vorige ronde:
+
+* laagste score bepalen
+
+Huidige ronde:
+
+* loser_user_id opslaan
+
+Weekloser:
+
+* mag bonus kiezen
+
+---
+
+# Belangrijke gameplay regels
+
+## Bonus
+
+Voor deadline:
+
+* alleen weekloser ziet bonus
+
+Na deadline:
+
+* iedereen ziet bonus
+
+Maximaal:
+
+* 1 bonuswedstrijd
+
+---
+
+## Openbare voorspellingen
+
+Voor deadline:
+
+* verborgen
+
+Na deadline:
+
+* zichtbaar
+
+---
+
+## Max spelers
+
+Maximaal:
+7 accounts
+
+---
+
+# Belangrijke workflow
+
+Lokaal ontwikkelen:
+
+npm run dev
+
+Lokaal:
+http://localhost:3000
+
+---
+
+# Live deploy workflow
+
+git add .
+git commit -m "Beschrijving"
+git push
+
+Daarna:
+
+* Vercel deployt automatisch
+
+Controleren:
+Vercel → Deployments
+
+Groen = live
+
+---
+
+# Nog te doen
+
+## Bonus
+
+* bonus zichtbaar maken op previous-round
+* bonus volledig verwerken in alle scoreberekeningen controleren
+
+---
+
+## Admin systeem
+
+* admin role
+* admin dashboard
+* uitslagen aanpassen
+* handmatig herberekenen
+
+---
+
+## Automatisering
+
+* automatische deadlines
+* automatische scoreberekening
+* automatische ronde-import
+* automatische standings update
+
+---
+
+## Productie afronden
+
+* debug vars uitschakelen
+* beveiliging finaliseren
+* mobiele optimalisatie
+* betere foutmeldingen/loading states
+* production env vars controleren
+
+---
+
+# Belangrijk voor productie
+
+Voor productie:
+DEBUG variabelen uitschakelen.
+
+Voorbeeld:
+
+DEBUG_CURRENT_MATCHDAY=
+DEBUG_PREVIOUS_MATCHDAY=
+
+NEXT_PUBLIC_DEBUG_DEADLINE_PASSED=
+NEXT_PUBLIC_DISABLE_DEADLINE=false
+
+---
+
+# Huidige status project
+
+De webapp functioneert al als online multiplayer voetbalpoule.
+
+Werkend:
+
+* accounts
+* voorspellingen
+* scores
+* standings
+* openbare voorspellingen
+* previous round
+* weekloser
+* bonuswedstrijd
+* deployment
+* multiplayer support
+* mobiele toegang

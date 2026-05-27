@@ -9,15 +9,26 @@ const supabase = createClient(
 export async function GET() {
   const { data: rounds, error: roundsError } = await supabase
     .from("rounds")
-    .select("id, round_number, deadline")
+    .select("id, round_number, deadline, bonus_match_id")
     .order("round_number", { ascending: false })
-    .limit(1);
+    //.limit(1);
 
   if (roundsError) {
     return NextResponse.json({ error: roundsError.message }, { status: 500 });
   }
 
-  const activeRound = rounds?.[0];
+  //const activeRound = rounds?.[0];
+  let activeRound = rounds?.[0];
+
+  if (process.env.DEBUG_CURRENT_MATCHDAY) {
+    const debugRound = rounds?.find(
+      (round) =>
+        round.round_number === Number(process.env.DEBUG_CURRENT_MATCHDAY)
+    );
+    if (debugRound) {
+      activeRound = debugRound;
+    }
+  }
 
   if (!activeRound) {
     return NextResponse.json({
@@ -111,6 +122,7 @@ export async function GET() {
   return NextResponse.json({
     round: activeRound.round_number,
     deadlinePassed: true,
+    bonusMatchId: activeRound.bonus_match_id,
     players: players || [],
     matches: tableMatches,
   });

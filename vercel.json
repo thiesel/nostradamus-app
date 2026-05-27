@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/process-round?secret=Th56ij87s2!1993!",
+      "schedule": "0 23 * * 0"
+    }
+  ]
+}
