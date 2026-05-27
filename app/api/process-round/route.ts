@@ -119,7 +119,13 @@ export async function GET(request: Request) {
     );
   }
 
-  const calculatedResults = [];
+  const calculatedResults: {
+    userId: string;
+    matchId: number;
+    match: string;
+    bonus: boolean;
+    points: number;
+  }[] = [];
 
   for (const prediction of predictions || []) {
     const match = prediction.matches as any;
