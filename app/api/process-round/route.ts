@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getActiveRound, getPreviousRound } from "@/lib/getActiveRound";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -56,42 +57,14 @@ export async function GET(request: Request) {
     );
   }
 
-//export async function GET() {
-  const { data: rounds, error: roundsError } = await supabase
-    .from("rounds")
-    .select("id, round_number, bonus_match_id")
-    .order("round_number", { ascending: false });
+  const currentRound = await getActiveRound();
+  const previousRound = await getPreviousRound();
 
-  if (roundsError || !rounds || rounds.length < 2) {
+  if (!currentRound || !previousRound) {
     return NextResponse.json(
-      { error: "Niet genoeg rondes gevonden" },
+      { error: "Geen geldige huidige of vorige ronde gevonden" },
       { status: 500 }
     );
-  }
-
-  let currentRound = rounds[0];
-  let previousRound = rounds[1];
-
-  if (process.env.DEBUG_CURRENT_MATCHDAY) {
-    const debugCurrent = rounds.find(
-      (round) =>
-        round.round_number === Number(process.env.DEBUG_CURRENT_MATCHDAY)
-    );
-
-    if (debugCurrent) {
-      currentRound = debugCurrent;
-    }
-  }
-
-  if (process.env.DEBUG_PREVIOUS_MATCHDAY) {
-    const debugPrevious = rounds.find(
-      (round) =>
-        round.round_number === Number(process.env.DEBUG_PREVIOUS_MATCHDAY)
-    );
-
-    if (debugPrevious) {
-      previousRound = debugPrevious;
-    }
   }
 
   const { data: predictions, error: predictionsError } = await supabase
@@ -204,16 +177,30 @@ export async function GET(request: Request) {
     );
   }
 
-  const { error: updateRoundError } = await supabase
+  const { error: updatePreviousRoundError } = await supabase
+    .from("rounds")
+    .update({
+      processed: true,
+    })
+    .eq("id", previousRound.id);
+
+  if (updatePreviousRoundError) {
+    return NextResponse.json(
+      { error: updatePreviousRoundError.message },
+      { status: 500 }
+    );
+  }
+
+  const { error: updateCurrentRoundError } = await supabase
     .from("rounds")
     .update({
       loser_user_id: weekLoser.userId,
     })
     .eq("id", currentRound.id);
 
-  if (updateRoundError) {
+  if (updateCurrentRoundError) {
     return NextResponse.json(
-      { error: updateRoundError.message },
+      { error: updateCurrentRoundError.message },
       { status: 500 }
     );
   }
@@ -222,6 +209,7 @@ export async function GET(request: Request) {
     message: "Ronde verwerkt",
     currentRound: currentRound.round_number,
     previousRound: previousRound.round_number,
+    previousRoundProcessed: true,
     calculatedPredictions: calculatedResults.length,
     weekLoser,
     allWeekScores: weekScores,

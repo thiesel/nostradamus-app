@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getActiveRound } from "@/lib/getActiveRound";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -7,7 +8,9 @@ const supabase = createClient(
 );
 
 export async function GET() {
-  const { data: rounds, error: roundsError } = await supabase
+
+    const activeRound = await getActiveRound();
+  /*const { data: rounds, error: roundsError } = await supabase
     .from("rounds")
     .select("id, round_number, deadline, bonus_match_id")
     .order("round_number", { ascending: false })
@@ -28,7 +31,8 @@ export async function GET() {
     if (debugRound) {
       activeRound = debugRound;
     }
-  }
+  }*/
+
 
   if (!activeRound) {
     return NextResponse.json({
@@ -38,6 +42,13 @@ export async function GET() {
       matches: [],
     });
   }
+
+  if (!activeRound.deadline) {
+    return NextResponse.json(
+        { error: "Deze ronde heeft geen deadline ingesteld" },
+        { status: 500 }
+    );
+  }   
 
   const deadline = new Date(activeRound.deadline);
   const now = new Date();

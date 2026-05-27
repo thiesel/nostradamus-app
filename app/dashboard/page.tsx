@@ -54,43 +54,35 @@ export default function DashboardPage() {
       setEmail(user.email || "");
       setUserId(user.id);
 
-      const importResponse = await fetch("/api/import-current-round");
-      const importData = await importResponse.json();
+      const dashboardResponse = await fetch("/api/dashboard-data");
+      const dashboardData = await dashboardResponse.json();
 
-      if (!importData.activeMatchday) {
-        alert("Geen actieve speelronde gevonden");
+      if (!dashboardResponse.ok || !dashboardData.activeRound) {
+        alert(dashboardData.error || "Geen actieve speelronde gevonden");
         return;
       }
 
-      const { data: activeRound } = await supabase
-        .from("rounds")
-        .select("id, round_number, deadline, loser_user_id, bonus_match_id")
-        .eq("round_number", importData.activeMatchday)
-        .single();
-
-      if (!activeRound) return;
+      const activeRound = dashboardData.activeRound;
 
       setActiveRoundId(activeRound.id);
       setRoundNumber(activeRound.round_number);
       setCanChooseBonus(activeRound.loser_user_id === user.id);
       setBonusMatchId(activeRound.bonus_match_id);
+      setMatches(dashboardData.matches || []);
 
-      const deadline = new Date(activeRound.deadline);
-      const now = new Date();
+      if (!activeRound.deadline) {
+        setDeadlinePassed(false);
+        setDeadlineText("Geen deadline ingesteld");
+      } else {
+        const deadline = new Date(activeRound.deadline);
+        const now = new Date();
 
-      const disableDeadline =
-        process.env.NEXT_PUBLIC_DISABLE_DEADLINE === "true";
+        const disableDeadline =
+          process.env.NEXT_PUBLIC_DISABLE_DEADLINE === "true";
 
-      setDeadlinePassed(disableDeadline ? false : now > deadline);
-      setDeadlineText(deadline.toLocaleString("nl-NL"));
-
-      const { data: matchesData } = await supabase
-        .from("matches")
-        .select("id, home_team, away_team, match_date")
-        .eq("round_id", activeRound.id)
-        .order("match_date", { ascending: true });
-
-      if (matchesData) setMatches(matchesData);
+        setDeadlinePassed(disableDeadline ? false : now > deadline);
+        setDeadlineText(deadline.toLocaleString("nl-NL"));
+      }
 
       const { data: predictionData } = await supabase
         .from("predictions")
@@ -153,6 +145,11 @@ export default function DashboardPage() {
       return;
     }
 
+    if (!activeRoundId) {
+      alert("Geen actieve speelronde gevonden");
+      return;
+    }
+
     for (const match of matches) {
       const prediction = predictions[match.id];
 
@@ -174,7 +171,7 @@ export default function DashboardPage() {
       return;
     }
 
-    if (canChooseBonus && activeRoundId && bonusMatchId) {
+    if (canChooseBonus && bonusMatchId) {
       const response = await fetch("/api/set-bonus-match", {
         method: "POST",
         headers: {
@@ -183,31 +180,40 @@ export default function DashboardPage() {
         body: JSON.stringify({
           roundId: activeRoundId,
           matchId: bonusMatchId,
-          userId: userId,
+          userId,
         }),
       });
 
       const data = await response.json();
 
-      if(!response.ok) {
+      if (!response.ok) {
         alert(data.error || "Fout bij opslaan bonuswedstrijd");
         return;
       }
     }
 
     const rows = matches.map((match) => ({
-      user_id: userId,
       match_id: match.id,
       predicted_home_score: Number(predictions[match.id].home),
       predicted_away_score: Number(predictions[match.id].away),
     }));
 
-    const { error } = await supabase.from("predictions").upsert(rows, {
-      onConflict: "user_id,match_id",
+    const response = await fetch("/api/save-predictions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        userId,
+        roundId: activeRoundId,
+        predictions: rows,
+      }),
     });
 
-    if (error) {
-      alert(error.message);
+    const data = await response.json();
+
+    if (!response.ok) {
+      alert(data.error || "Fout bij opslaan voorspellingen");
       return;
     }
 

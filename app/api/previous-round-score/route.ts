@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getPreviousRound } from "@/lib/getActiveRound";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -7,39 +8,17 @@ const supabase = createClient(
 );
 
 export async function GET() {
-  const { data: rounds, error: roundsError } = await supabase
-    .from("rounds")
-    .select("id, round_number, bonus_match_id")
-    .order("round_number", { ascending: false });
+  const previousRound = await getPreviousRound();
 
-  if (roundsError) {
-    return NextResponse.json({ error: roundsError.message }, { status: 500 });
-  }
-
-  if (!rounds || rounds.length < 2) {
+  if (!previousRound) {
     return NextResponse.json({
       round: null,
+      bonusMatchId: null,
       players: [],
       matches: [],
       totals: {},
     });
   }
-
-  //const previousRound = rounds[1];
-  let previousRound = rounds[1];
-
-  if (process.env.DEBUG_PREVIOUS_MATCHDAY) {
-    const debugRound = rounds.find(
-      (round) => round.round_number === Number(process.env.DEBUG_PREVIOUS_MATCHDAY)
-    );
-
-    if (debugRound) {
-      previousRound = debugRound;
-    }
-  }
-
-  console.log("DEBUG_PREVIOUS_MATCHDAY:", process.env.DEBUG_PREVIOUS_MATCHDAY);
-  console.log("GEKOZEN PREVIOUS ROUND:", previousRound);
 
   const { data: players, error: playersError } = await supabase
     .from("profiles")
@@ -60,11 +39,14 @@ export async function GET() {
     return NextResponse.json({ error: matchesError.message }, { status: 500 });
   }
 
+  const matchIds = (matches || []).map((match) => match.id);
+
   const { data: predictions, error: predictionsError } = await supabase
     .from("predictions")
     .select(
       "user_id, match_id, predicted_home_score, predicted_away_score, points"
-    );
+    )
+    .in("match_id", matchIds);
 
   if (predictionsError) {
     return NextResponse.json(

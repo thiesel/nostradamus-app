@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getActiveRound } from "@/lib/getActiveRound";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || "",
@@ -18,23 +19,71 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: round, error: roundError } = await supabase
-    .from("rounds")
-    .select("id, loser_user_id")
-    .eq("id", roundId)
-    .single();
+  const activeRound = await getActiveRound();
 
-  if (roundError || !round) {
+  if (!activeRound) {
     return NextResponse.json(
-      { error: "Ronde niet gevonden" },
+      { error: "Geen actieve ronde gevonden" },
       { status: 404 }
     );
   }
 
-  if (round.loser_user_id !== userId) {
+  if (roundId !== activeRound.id) {
+    return NextResponse.json(
+      { error: "Je kunt alleen een bonuswedstrijd kiezen voor de actieve ronde." },
+      { status: 403 }
+    );
+  }
+
+  if (!activeRound.deadline) {
+    return NextResponse.json(
+      { error: "Deze ronde heeft geen deadline ingesteld" },
+      { status: 500 }
+    );
+  }
+
+  const deadline = new Date(activeRound.deadline);
+  const now = new Date();
+
+  const disableDeadline =
+    process.env.NEXT_PUBLIC_DISABLE_DEADLINE === "true";
+
+  const deadlinePassed = disableDeadline ? false : now > deadline;
+
+  if (deadlinePassed) {
+    return NextResponse.json(
+      {
+        error:
+          "Deadline is verstreken. De bonuswedstrijd kan niet meer worden aangepast.",
+      },
+      { status: 403 }
+    );
+  }
+
+  if (activeRound.loser_user_id !== userId) {
     return NextResponse.json(
       { error: "Alleen de weekloser mag de bonuswedstrijd kiezen" },
       { status: 403 }
+    );
+  }
+
+  const { data: match, error: matchError } = await supabase
+    .from("matches")
+    .select("id, round_id")
+    .eq("id", matchId)
+    .single();
+
+  if (matchError || !match) {
+    return NextResponse.json(
+      { error: "Wedstrijd niet gevonden" },
+      { status: 404 }
+    );
+  }
+
+  if (match.round_id !== activeRound.id) {
+    return NextResponse.json(
+      { error: "Deze wedstrijd hoort niet bij de actieve ronde" },
+      { status: 400 }
     );
   }
 
@@ -43,7 +92,7 @@ export async function POST(request: Request) {
     .update({
       bonus_match_id: matchId,
     })
-    .eq("id", roundId);
+    .eq("id", activeRound.id);
 
   if (updateError) {
     return NextResponse.json(
@@ -54,7 +103,8 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     message: "Bonuswedstrijd opgeslagen",
-    roundId,
+    roundId: activeRound.id,
+    roundNumber: activeRound.round_number,
     matchId,
   });
 }
