@@ -1,28 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Standing = {
   userId: string;
   name: string;
   totalPoints: number;
+  predictionsCount: number;
+  exactScores: number;
 };
 
-function OverviewContent() {
+export default function OverviewPage() {
   const [email, setEmail] = useState("");
   const [standings, setStandings] = useState<Standing[]>([]);
-  const [hasPredictions, setHasPredictions] = useState(false);
-  const [showPopup, setShowPopup] = useState(false);
-  const [publicPredictionsOpen, setPublicPredictionsOpen] = useState(false);
-
-  const searchParams = useSearchParams();
-  const predictionsSaved = searchParams.get("predictionsSaved");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadUser() {
+    async function loadOverview() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -37,139 +33,152 @@ function OverviewContent() {
       const standingsResponse = await fetch("/api/standings");
       const standingsData = await standingsResponse.json();
 
-      if (standingsData.standings) {
-        setStandings(standingsData.standings);
-      }
+      setStandings(standingsData.standings || []);
 
-      const publicPredictionsResponse = await fetch("/api/public-predictions");
-      const publicPredictionsData = await publicPredictionsResponse.json();
-
-      setPublicPredictionsOpen(publicPredictionsData.deadlinePassed === true);
-
-      const { data: predictions } = await supabase
-        .from("predictions")
-        .select("id")
-        .eq("user_id", user.id)
-        .limit(1);
-
-      if (predictions && predictions.length > 0) {
-        setHasPredictions(true);
-      }
+      setLoading(false);
     }
 
-    loadUser();
+    loadOverview();
   }, []);
-
-  useEffect(() => {
-    if (predictionsSaved) {
-      setShowPopup(true);
-
-      const timer = setTimeout(() => {
-        setShowPopup(false);
-      }, 3000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [predictionsSaved]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
     window.location.href = "/login";
   }
 
+  const leaderPoints = standings[0]?.totalPoints || 0;
+
   return (
     <main className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-10">
           <div>
-            <h1 className="text-5xl font-bold">Overview</h1>
-            <p className="text-gray-400 mt-2">Ingelogd als: {email}</p>
+            <h1 className="text-5xl font-bold">Nostradamus</h1>
+
+            <p className="text-gray-400 mt-2">
+              Ingelogd als: {email}
+            </p>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="bg-red-500 text-white px-6 py-3 rounded-xl font-bold cursor-pointer hover:opacity-90 transition"
-          >
-            Uitloggen
-          </button>
+          <div className="flex gap-3">
+            <Link
+              href="/dashboard"
+              className="bg-white text-black px-6 py-3 rounded-xl font-bold hover:opacity-90 transition"
+            >
+              Voorspellingen beheren
+            </Link>
+
+            <Link
+              href="/predictions"
+              className="bg-white text-black px-6 py-3 rounded-xl font-bold hover:opacity-90 transition"
+            >
+              Openbare voorspellingen
+            </Link>
+
+            <Link
+              href="/previous-round"
+              className="bg-white text-black px-6 py-3 rounded-xl font-bold hover:opacity-90 transition"
+            >
+              Vorige ronde
+            </Link>
+
+            
+
+            <button
+              onClick={handleLogout}
+              className="bg-red-700 text-white px-6 py-3 rounded-xl font-bold hover:opacity-90 transition"
+            >
+              Uitloggen
+            </button>
+          </div>
         </div>
 
-        {showPopup && (
-          <div className="bg-green-500/20 border border-green-500 text-green-300 rounded-xl p-4 mb-6 animate-pulse">
-            Voorspellingen succesvol ingediend!
+        <div className="rounded-2xl bg-white/5 border border-white/10 p-6">
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h2 className="text-4xl font-bold">Standings</h2>
+
+              <p className="text-gray-400 mt-2">
+                Live totaalscores van alle spelers
+              </p>
+            </div>
           </div>
-        )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-6">
-            <h2 className="text-3xl font-bold mb-4">Tussenstand</h2>
+          {loading ? (
+            <p className="text-gray-400">Standings laden...</p>
+          ) : standings.length === 0 ? (
+            <p className="text-gray-400">
+              Nog geen standings beschikbaar.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {standings.map((player, index) => {
+                const difference = leaderPoints - player.totalPoints;
 
-            <div className="flex flex-col gap-3 text-gray-300">
-              {standings.length === 0 ? (
-                <p className="text-gray-400">Nog geen spelers gevonden.</p>
-              ) : (
-                standings.map((player, index) => (
+                return (
                   <div
                     key={player.userId}
-                    className="flex justify-between border-b border-white/10 pb-2"
+                    className={`rounded-2xl border p-6 ${
+                      index === 0
+                        ? "border-yellow-400 bg-yellow-400/10"
+                        : "border-white/10 bg-black/30"
+                    }`}
                   >
-                    <span>
-                      {index + 1}. {player.name}
-                    </span>
-                    <span>{player.totalPoints} punten</span>
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+                      <div>
+                        <div className="flex items-center gap-4">
+                          <div
+                            className={`text-4xl font-black ${
+                              index === 0
+                                ? "text-yellow-300"
+                                : "text-white"
+                            }`}
+                          >
+                            #{index + 1}
+                          </div>
+
+                          <div>
+                            <h3 className="text-3xl font-bold">
+                              {player.name}
+                            </h3>
+
+                            <p className="text-gray-400 mt-1">
+                              {player.predictionsCount} voorspellingen ·{" "}
+                              {player.exactScores} exacte scores
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-4">
+                        <div className="rounded-xl bg-black/40 border border-white/10 px-6 py-4 min-w-[140px] text-center">
+                          <div className="text-sm text-gray-400 mb-1">
+                            Punten
+                          </div>
+
+                          <div className="text-4xl font-black text-green-300">
+                            {player.totalPoints}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl bg-black/40 border border-white/10 px-6 py-4 min-w-[140px] text-center">
+                          <div className="text-sm text-gray-400 mb-1">
+                            Achterstand
+                          </div>
+
+                          <div className="text-4xl font-black text-red-300">
+                            {difference}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                ))
-              )}
+                );
+              })}
             </div>
-          </div>
-
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-6">
-            <h2 className="text-3xl font-bold mb-4">Acties</h2>
-
-            <div className="flex flex-col gap-4">
-              <Link
-                href="/dashboard"
-                className="block rounded-xl bg-white text-black px-6 py-3 font-bold text-center cursor-pointer hover:opacity-90 transition"
-              >
-                {hasPredictions
-                  ? "Voorspellingen veranderen"
-                  : "Voorspellingen invullen"}
-              </Link>
-
-              <Link
-                href="/previous-round"
-                className="block rounded-xl border border-white/20 text-white px-6 py-3 font-bold text-center cursor-pointer hover:bg-white/10 transition"
-              >
-                Score vorige ronde
-              </Link>
-
-              {publicPredictionsOpen ? (
-                <Link
-                    href="/predictions"
-                    className="block rounded-xl border border-white/20 text-white px-6 py-3 font-bold text-center cursor-pointer hover:bg-white/10 transition"
-                >
-                    Openbare voorspellingen
-                </Link>
-              ) : (
-                <button
-                    disabled
-                    className="block w-full rounded-xl border border-white/10 text-gray-500 px-6 py-3 font-bold text-center cursor-not-allowed opacity-50"
-                >
-                    Openbare voorspellingen
-                </button>
-            )}
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </main>
-  );
-}
-
-export default function OverviewPage() {
-  return (
-    <Suspense fallback={null}>
-      <OverviewContent />
-    </Suspense>
   );
 }

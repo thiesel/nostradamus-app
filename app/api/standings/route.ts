@@ -6,6 +6,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || ""
 );
 
+type Standing = {
+  userId: string;
+  name: string;
+  totalPoints: number;
+  predictionsCount: number;
+  exactScores: number;
+};
+
 export async function GET() {
   const { data: profiles, error: profilesError } = await supabase
     .from("profiles")
@@ -19,34 +27,51 @@ export async function GET() {
     );
   }
 
-  const standings = [];
+  const { data: predictions, error: predictionsError } = await supabase
+    .from("predictions")
+    .select("user_id, points");
 
-  for (const profile of profiles || []) {
-    const { data: predictions, error: predictionsError } = await supabase
-      .from("predictions")
-      .select("points")
-      .eq("user_id", profile.id);
+  if (predictionsError) {
+    return NextResponse.json(
+      { error: predictionsError.message },
+      { status: 500 }
+    );
+  }
 
-    if (predictionsError) {
-      return NextResponse.json(
-        { error: predictionsError.message },
-        { status: 500 }
-      );
-    }
+  const standings: Standing[] = (profiles || []).map((profile) => {
+    const userPredictions = (predictions || []).filter(
+      (prediction) => prediction.user_id === profile.id
+    );
 
-    const totalPoints = (predictions || []).reduce(
+    const totalPoints = userPredictions.reduce(
       (sum, prediction) => sum + (prediction.points || 0),
       0
     );
 
-    standings.push({
+    const exactScores = userPredictions.filter(
+      (prediction) => prediction.points === 12 || prediction.points === 24
+    ).length;
+
+    return {
       userId: profile.id,
       name: profile.display_name,
       totalPoints,
-    });
-  }
+      predictionsCount: userPredictions.length,
+      exactScores,
+    };
+  });
 
-  standings.sort((a, b) => b.totalPoints - a.totalPoints);
+  standings.sort((a, b) => {
+    if (b.totalPoints !== a.totalPoints) {
+      return b.totalPoints - a.totalPoints;
+    }
+
+    if (b.exactScores !== a.exactScores) {
+      return b.exactScores - a.exactScores;
+    }
+
+    return a.name.localeCompare(b.name);
+  });
 
   return NextResponse.json({
     standings,
